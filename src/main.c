@@ -25,6 +25,7 @@ void create_opengl_context(HWND hwnd) {
         printf("Error: Cannot set opengl pixel format\n");
         exit(-1);
     }
+    /* TODO: make gl_context global to be able to destroy it on application shutdowni */
     HGLRC gl_context = wglCreateContext(device_context);
     wglMakeCurrent(device_context, gl_context);
     ReleaseDC(hwnd, device_context);
@@ -56,7 +57,7 @@ LRESULT CALLBACK ui_win32_proc(HWND hwnd, UINT message, WPARAM wparam, LPARAM lp
             PostQuitMessage(0);
         }break;
         case WM_QUIT: {
-            /* TODO: check why we are never geting WM_QUIT message*/
+            /* TODO: check why we are never geting WM_QUIT message */
         } break;
         default: {
             result = DefWindowProcA(hwnd, message, wparam, lparam);
@@ -103,10 +104,12 @@ int main(void) {
         glBegin(GL_TRIANGLES);
         glColor3f(1.0f, 0.0f, 0.0f);
         glVertex3i(  0,   0, 0);
-        glVertex3i(  0, 200, 0);
-        glVertex3i(200, 200, 0);
+        glColor3f(0.0f, 1.0f, 0.0f);
+        glVertex3i(  0, 400, 0);
+        glColor3f(0.0f, 0.0f, 1.0f);
+        glVertex3i(400, 400, 0);
         glEnd();
-        
+
         SwapBuffers(device_context);
     }
 
