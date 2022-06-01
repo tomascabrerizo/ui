@@ -116,6 +116,8 @@ static UI_u64 draw_cmmd_buffer_count;
 
 static UI_State ui_state;
 static UI_V2i ui_default_button_dim = {200, 100};
+static UI_V2i ui_default_checkbox_dim = {50, 50};
+static UI_V2i ui_default_slider_dim = {200, 20};
 
 /* ------------------------------------------------------------------------ */
 
@@ -191,18 +193,17 @@ inline UI_b32 ui_is_active(void *id) {
     return ui_state.active == id;
 }
 
-UI_b32 ui_button(char *name, void *id, int x, int y) {
+UI_b32 ui_button(void *id, char *name, int x, int y) {
+    /* Widget dimensions */
     UI_V2i pos = v2i(x, y);
     UI_V2i dim = ui_default_button_dim;
-    UI_V4f color = v4f(0.0f, 1.0f, 0.0, 1.0f);
-
+    UI_V4f color = v4f(0.4f, 0.4f, 0.4f, 1.0f);
     UI_b32 result = FALSE;
-    
+    /* Widget logic */
     if (ui_is_active(id)) {
         if (ui_state.mouse_went_up) {
-            if (ui_is_hot(id)) {
+            if (ui_is_hot(id) && ui_mouse_inside_rect(pos, dim)) {
                 result = TRUE;
-                printf("button press\n");
             }
             ui_set_active(0);
         }
@@ -211,21 +212,88 @@ UI_b32 ui_button(char *name, void *id, int x, int y) {
             ui_set_active(id);
         }
     }
-
     if (ui_mouse_inside_rect(pos, dim)) {
         ui_set_hot(id);
     }
-
-    /* Choose button color */
-    if (ui_is_hot(id)) {
-        color = v4f(0.8f, 0.4f, 0.4f, 1.0f);
+    /* Widget rendering */
+    if (ui_is_hot(id) && ui_mouse_inside_rect(pos, dim)) {
+        color = v4f(0.6f, 0.7f, 0.6f, 1.0f);
     }
-    if(ui_is_active(id)) {
+    if (result) {
         color = v4f(0.4f, 0.4f, 0.8f, 1.0f);
     }
     ui_push_rect(pos, dim, color);
-
     return result;
+}
+
+void ui_checkbox(void *id, UI_b32 *value, int x, int y) {
+    /* Widget dimensions */
+    UI_V2i pos = v2i(x, y);
+    UI_V2i dim = ui_default_checkbox_dim;
+    UI_V4f color = v4f(0.4f, 0.4f, 0.4f, 1.0f);
+    UI_V2i inner_pos = v2i_add(pos, v2i(8, 8));
+    UI_V2i inner_dim = v2i_sub(dim, v2i(16, 16));
+    UI_V4f inner_color = v4f(0.7f, 0.7f, 0.7f, 1.0f);
+    /* Widget logic */
+    if (ui_is_active(id)) {
+        if (ui_state.mouse_went_up) {
+            if (ui_is_hot(id) && ui_mouse_inside_rect(inner_pos, inner_dim)) {
+                *value = !(*value);
+            }
+            ui_set_active(0);
+        }
+    } else if (ui_is_hot(id)) {
+        if (ui_state.mouse_went_down) {
+            ui_set_active(id);
+        }
+    }
+    if (ui_mouse_inside_rect(pos, dim)) {
+        ui_set_hot(id);
+    }
+    /* Widget rendering */
+    if (ui_is_hot(id) && ui_mouse_inside_rect(pos, dim)) {
+        color = v4f(0.6f, 0.7f, 0.6f, 1.0f);
+    }
+    if (*value) {
+        inner_color = v4f(0.7f, 1.0f, 0.7f, 1.0f);
+    }
+    ui_push_rect(pos, dim, color);
+    ui_push_rect(inner_pos, inner_dim, inner_color);
+}
+
+void ui_slider(void *id, float *value, int x, int y) {
+    /* Widget dimensions */
+    UI_V2i pos = v2i(x, y);
+    UI_V2i dim = ui_default_slider_dim;
+    UI_V4f color = v4f(0.4f, 0.4f, 0.4f, 1.0f);
+    UI_f32 inner_offset_x = (((*value + 1.0f) / 2.0f) * dim.x);
+    UI_V2i inner_dim = v2i(20, dim.y);
+    UI_V2i inner_pos = v2i(pos.x + (UI_i32)inner_offset_x - (inner_dim.x/2), pos.y);
+    UI_V4f inner_color = v4f(0.7f, 0.7f, 0.7f, 1.0f);
+    /* Widget logic */
+    if (ui_is_active(id)) {
+        if (ui_state.mouse_is_down) {
+            if (ui_is_hot(id) && ui_mouse_inside_rect(pos, dim)) {
+                *value = ((((UI_f32)(ui_state.mouse.x - pos.x) / dim.x) * 2) - 1);
+            }
+        }
+        if (ui_state.mouse_went_up) {
+            ui_set_active(0);
+        }
+    } else if (ui_is_hot(id)) {
+        if (ui_state.mouse_went_down) {
+            ui_set_active(id);
+        }
+    }
+    if (ui_mouse_inside_rect(pos, dim)) {
+        ui_set_hot(id);
+    }
+    /* Widget rendering*/
+    if (ui_is_hot(id) && ui_mouse_inside_rect(inner_pos, inner_dim)) {
+        inner_color = v4f(0.6f, 0.7f, 0.6f, 1.0f);
+    }
+    ui_push_rect(pos, dim, color);
+    ui_push_rect(inner_pos, inner_dim, inner_color);
 }
 
 /* ------------------------------------------------------------------------ */
@@ -259,16 +327,19 @@ void main_loop(HWND window) {
     HDC device_context = GetDC(window);
 
     /* TODO: check if this pointers have to be static */
-    char *button_name0 = "button";
-    if(ui_button(button_name0, button_name0, 100, 100)) {
+    char *button_name = "button";
+    if(ui_button((void *)(button_name + 0), button_name, 100, 100)) {
     }
-    char *button_name1 = "button";
-    if(ui_button(button_name1, button_name1, 100, 300)) {
+    if(ui_button((void *)(button_name + 1), button_name, 100, 300)) {
     }
-
+    static UI_b32 checked = 0;
+    ui_checkbox((void *)&checked, &checked, 400, 100);
+    static float value = 0.0f;
+    ui_slider((void  *)&value, &value, 400, 200);
+    
     ui_update();
     
-    glClearColor(0.3f, 0.3f, 0.3f, 1.0f);
+    glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
     ui_draw_draw_cmmd_buffer(window);
