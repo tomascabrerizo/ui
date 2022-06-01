@@ -97,12 +97,16 @@ typedef struct UI_DrawCmmd {
 } UI_DrawCmmd;
 
 typedef struct UI_State {
+    /* Widget */
     void *active;
     void *hot;
-
-    UI_V2i mouse_pos;
+    /* Input */
+    UI_V2i mouse;
+    UI_b32 mouse_is_down;
+    UI_b32 mouse_is_up;
+    UI_b32 mouse_went_down;
+    UI_b32 mouse_went_up;
 } UI_State;
-
 
 /* Global UI library state */
 
@@ -114,6 +118,34 @@ static UI_State ui_state;
 static UI_V2i ui_default_button_dim = {200, 100};
 
 /* ------------------------------------------------------------------------ */
+
+LRESULT ui_win32_get_input(HWND window, UINT message, WPARAM wparam, LPARAM lparam) {
+    UI_b32 last_mouse_is_down = ui_state.mouse_is_down;
+    UI_b32 last_mouse_is_up = ui_state.mouse_is_up;
+    
+    LRESULT result = 0;
+    switch (message) {
+        case WM_MOUSEMOVE: {
+            ui_state.mouse.x = LOWORD(lparam);
+            ui_state.mouse.y = HIWORD(lparam);
+        } break;
+        case WM_LBUTTONUP: {
+            ui_state.mouse_is_up = TRUE;
+            ui_state.mouse_is_down = FALSE;
+
+            ui_state.mouse_went_up = ui_state.mouse_is_up && !last_mouse_is_up;
+        } break;
+        case WM_LBUTTONDOWN: {
+            ui_state.mouse_is_down = TRUE;
+            ui_state.mouse_is_up = FALSE;
+
+            ui_state.mouse_went_down = ui_state.mouse_is_down && !last_mouse_is_down;
+        } break;
+        default: {
+        } break;
+    }
+    return result;
+}
 
 void ui_push_draw_cmmd(UI_DrawCmmd cmmd) {
     ASSERT(draw_cmmd_buffer_count < UI_DRAW_CMMD_BUFFER_MAX);
@@ -128,14 +160,79 @@ void ui_push_rect(UI_V2i pos, UI_V2i dim, UI_V4f color) {
     ui_push_draw_cmmd(cmmd);
 }
 
-UI_b32 ui_button(char *name, void *id, int x, int y) {
-    ui_push_rect(v2i(x, y), ui_default_button_dim, v4f(0.0f, 1.0f, 0.0f, 1.0f));
-    return FALSE;
+UI_b32 ui_mouse_inside_rect(UI_V2i pos, UI_V2i dim) {
+    UI_b32 result = ui_state.mouse.x >= pos.x && ui_state.mouse.x < (pos.x + dim.x) &&
+        ui_state.mouse.y >= pos.y && ui_state.mouse.y < (pos.y + dim.y);
+    return result;
 }
+
+void ui_update(void)
+{
+    /* TODO: See how to update frame information */
+    ui_state.mouse_went_down = FALSE;
+    ui_state.mouse_went_up = FALSE;
+}
+
+inline void ui_set_hot(void *id) {
+    if (!ui_state.active) {
+        ui_state.hot = id;
+    }
+}
+
+inline void ui_set_active(void *id) {
+    ui_state.active = id;
+}
+
+inline UI_b32 ui_is_hot(void *id) {
+    return ui_state.hot == id;
+}
+
+inline UI_b32 ui_is_active(void *id) {
+    return ui_state.active == id;
+}
+
+UI_b32 ui_button(char *name, void *id, int x, int y) {
+    UI_V2i pos = v2i(x, y);
+    UI_V2i dim = ui_default_button_dim;
+    UI_V4f color = v4f(0.0f, 1.0f, 0.0, 1.0f);
+
+    UI_b32 result = FALSE;
+    
+    if (ui_is_active(id)) {
+        if (ui_state.mouse_went_up) {
+            if (ui_is_hot(id)) {
+                result = TRUE;
+                printf("button press\n");
+            }
+            ui_set_active(0);
+        }
+    } else if (ui_is_hot(id)) {
+        if (ui_state.mouse_went_down) {
+            ui_set_active(id);
+        }
+    }
+
+    if (ui_mouse_inside_rect(pos, dim)) {
+        ui_set_hot(id);
+    }
+
+    /* Choose button color */
+    if (ui_is_hot(id)) {
+        color = v4f(0.8f, 0.4f, 0.4f, 1.0f);
+    }
+    if(ui_is_active(id)) {
+        color = v4f(0.4f, 0.4f, 0.8f, 1.0f);
+    }
+    ui_push_rect(pos, dim, color);
+
+    return result;
+}
+
+/* ------------------------------------------------------------------------ */
 
 void ui_draw_draw_cmmd_buffer(HWND window) {
     (void)window;
-    for(UI_u64 i = 0; i < draw_cmmd_buffer_count; ++i) {
+    for (UI_u64 i = 0; i < draw_cmmd_buffer_count; ++i) {
         UI_DrawCmmd cmmd = draw_cmmd_buffer[i];
         UI_RectMesh r = ui_rect_get_mesh(cmmd.pos, cmmd.dim);
 
@@ -162,15 +259,15 @@ void main_loop(HWND window) {
     HDC device_context = GetDC(window);
 
     /* TODO: check if this pointers have to be static */
-    static char *button_name0 = "button";
-    if(ui_button(button_name0, &button_name0, 100, 100)) {
+    char *button_name0 = "button";
+    if(ui_button(button_name0, button_name0, 100, 100)) {
     }
-    static char *button_name1 = "button";
-    if(ui_button(button_name1, &button_name1, 100, 300)) {
+    char *button_name1 = "button";
+    if(ui_button(button_name1, button_name1, 100, 300)) {
     }
 
-    /* printf("b0 addrs: %llx. b1 addrs: %llx\n", (UI_u64)&button_name0, (UI_u64)&button_name1); */
-
+    ui_update();
+    
     glClearColor(0.3f, 0.3f, 0.3f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
@@ -209,9 +306,10 @@ void create_opengl_context(HWND hwnd) {
     wglSwapIntervalEXT(1);
 }
 
-LRESULT CALLBACK ui_win32_proc(HWND window, UINT message, WPARAM wparam, LPARAM lparam) {
-    LRESULT result = 0;
-    switch(message) {
+LRESULT CALLBACK win32_proc(HWND window, UINT message, WPARAM wparam, LPARAM lparam) {
+    LRESULT result = ui_win32_get_input(window, message, wparam, lparam);
+    
+    switch (message) {
         case WM_CREATE: {
             create_opengl_context(window);
         } break;
@@ -245,11 +343,11 @@ int main(void) {
 
     WNDCLASSA window_class = {0};
     window_class.style = CS_OWNDC|CS_HREDRAW|CS_VREDRAW;
-    window_class.lpfnWndProc = ui_win32_proc;
+    window_class.lpfnWndProc = win32_proc;
     window_class.hInstance = hinstance;
     window_class.lpszClassName = "ui_window_class";
 
-    if(RegisterClassA(&window_class) == 0) {
+    if (RegisterClassA(&window_class) == 0) {
         printf("Error: Cannot register Window class\n");
         exit(-1);
     }
@@ -257,15 +355,15 @@ int main(void) {
     HWND window = CreateWindowA(window_class.lpszClassName, "ui test",
                                 WS_OVERLAPPEDWINDOW|WS_VISIBLE,
                                 100, 100, 800, 600, 0, 0, hinstance, 0);
-    if(window == 0) {
+    if (window == 0) {
         printf("Error: Cannot create Window\n");
         exit(-1);
     }
 
     global_running = 1;
-    while(global_running) {
+    while (global_running) {
         MSG message;
-        while(PeekMessage(&message, window, 0, 0, PM_REMOVE)) {
+        while (PeekMessage(&message, window, 0, 0, PM_REMOVE)) {
             TranslateMessage(&message);
             DispatchMessageA(&message);
         }
