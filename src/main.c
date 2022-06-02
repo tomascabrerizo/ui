@@ -100,6 +100,8 @@ typedef struct UI_State {
     /* Widget */
     void *active;
     void *hot;
+    void *hover;
+    void *next_hover;
     /* Input */
     UI_V2i mouse;
     UI_b32 mouse_is_down;
@@ -173,6 +175,9 @@ void ui_update(void)
     /* TODO: See how to update frame information */
     ui_state.mouse_went_down = FALSE;
     ui_state.mouse_went_up = FALSE;
+    /* TODO: Check if next_hover = 0 is necessary */
+    ui_state.hover = ui_state.next_hover;
+    ui_state.next_hover = 0;
 }
 
 inline void ui_set_hot(void *id) {
@@ -185,12 +190,20 @@ inline void ui_set_active(void *id) {
     ui_state.active = id;
 }
 
+inline void ui_set_next_hover(void *id) {
+    ui_state.next_hover = id;
+}
+
 inline UI_b32 ui_is_hot(void *id) {
     return ui_state.hot == id;
 }
 
 inline UI_b32 ui_is_active(void *id) {
     return ui_state.active == id;
+}
+
+inline UI_b32 ui_is_hover(void *id) {
+    return ui_state.hover == id;
 }
 
 UI_b32 ui_button(void *id, char *name, int x, int y) {
@@ -200,20 +213,23 @@ UI_b32 ui_button(void *id, char *name, int x, int y) {
     UI_V4f color = v4f(0.4f, 0.4f, 0.4f, 1.0f);
     UI_b32 result = FALSE;
     /* Widget logic */
-    if (ui_is_active(id)) {
-        if (ui_state.mouse_went_up) {
-            if (ui_is_hot(id) && ui_mouse_inside_rect(pos, dim)) {
+    if (ui_is_hover(id)) {
+        if (ui_is_active(id) && ui_state.mouse_went_up) {
+            if (ui_is_hover(id) && ui_is_hot(id) && ui_mouse_inside_rect(pos, dim)) {
                 result = TRUE;
             }
             ui_set_active(0);
+        } else if (ui_is_hot(id)) {
+            if (ui_state.mouse_went_down) {
+                ui_set_active(id);
+            }
         }
-    } else if (ui_is_hot(id)) {
-        if (ui_state.mouse_went_down) {
-            ui_set_active(id);
+        if (ui_mouse_inside_rect(pos, dim)) {
+            ui_set_hot(id);
         }
     }
     if (ui_mouse_inside_rect(pos, dim)) {
-        ui_set_hot(id);
+        ui_set_next_hover(id);
     }
     /* Widget rendering */
     if (ui_is_hot(id) && ui_mouse_inside_rect(pos, dim)) {
@@ -235,20 +251,23 @@ void ui_checkbox(void *id, UI_b32 *value, int x, int y) {
     UI_V2i inner_dim = v2i_sub(dim, v2i(16, 16));
     UI_V4f inner_color = v4f(0.7f, 0.7f, 0.7f, 1.0f);
     /* Widget logic */
-    if (ui_is_active(id)) {
-        if (ui_state.mouse_went_up) {
+    if (ui_is_hover(id)) {
+        if (ui_is_active(id) && ui_state.mouse_went_up) {
             if (ui_is_hot(id) && ui_mouse_inside_rect(inner_pos, inner_dim)) {
                 *value = !(*value);
             }
             ui_set_active(0);
+        } else if (ui_is_hot(id)) {
+            if (ui_state.mouse_went_down) {
+                ui_set_active(id);
+            }
         }
-    } else if (ui_is_hot(id)) {
-        if (ui_state.mouse_went_down) {
-            ui_set_active(id);
+        if (ui_mouse_inside_rect(pos, dim)) {
+            ui_set_hot(id);
         }
     }
     if (ui_mouse_inside_rect(pos, dim)) {
-        ui_set_hot(id);
+        ui_set_next_hover(id);
     }
     /* Widget rendering */
     if (ui_is_hot(id) && ui_mouse_inside_rect(pos, dim)) {
@@ -271,22 +290,27 @@ void ui_slider(void *id, float *value, int x, int y) {
     UI_V2i inner_pos = v2i(pos.x + (UI_i32)inner_offset_x - (inner_dim.x/2), pos.y);
     UI_V4f inner_color = v4f(0.7f, 0.7f, 0.7f, 1.0f);
     /* Widget logic */
-    if (ui_is_active(id)) {
-        if (ui_state.mouse_is_down) {
-            if (ui_is_hot(id) && ui_mouse_inside_rect(pos, dim)) {
-                *value = ((((UI_f32)(ui_state.mouse.x - pos.x) / dim.x) * 2) - 1);
+    if (ui_is_hover(id)) {
+        if (ui_is_active(id)) {
+            if (ui_state.mouse_is_down) {
+                if (ui_is_hover(id) && ui_is_hot(id) && ui_mouse_inside_rect(pos, dim)) {
+                    *value = ((((UI_f32)(ui_state.mouse.x - pos.x) / dim.x) * 2) - 1);
+                }
+            }
+            if (ui_state.mouse_went_up) {
+                ui_set_active(0);
+            }
+        } else if (ui_is_hot(id)) {
+            if (ui_state.mouse_went_down) {
+                ui_set_active(id);
             }
         }
-        if (ui_state.mouse_went_up) {
-            ui_set_active(0);
-        }
-    } else if (ui_is_hot(id)) {
-        if (ui_state.mouse_went_down) {
-            ui_set_active(id);
+        if (ui_mouse_inside_rect(pos, dim)) {
+            ui_set_hot(id);
         }
     }
     if (ui_mouse_inside_rect(pos, dim)) {
-        ui_set_hot(id);
+        ui_set_next_hover(id);
     }
     /* Widget rendering*/
     if (ui_is_hot(id) && ui_mouse_inside_rect(inner_pos, inner_dim)) {
@@ -333,7 +357,7 @@ void main_loop(HWND window) {
     if(ui_button((void *)(button_name + 1), button_name, 100, 300)) {
     }
     static UI_b32 checked = 0;
-    ui_checkbox((void *)&checked, &checked, 400, 100);
+    ui_checkbox((void *)&checked, &checked, 200, 100);
     static float value = 0.0f;
     ui_slider((void  *)&value, &value, 400, 200);
     
