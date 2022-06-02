@@ -5,10 +5,12 @@
 #include <Windows.h>
 #include <GL\gl.h>
 
-#define ASSERT(v) assert((v))
-
 #define TRUE 1
 #define FALSE 0
+
+#define ASSERT(v) assert((v))
+#define INVALID_CODE_PATH() ASSERT(TRUE)
+
 
 typedef uint64_t UI_u64;
 typedef uint32_t UI_u32;
@@ -31,6 +33,11 @@ static PFNWGLSWAPINTERVALEXTPROC wglSwapIntervalEXT;
 /* Global Appication state */
 static HGLRC global_gl_context;
 static unsigned int global_running;
+
+inline UI_i32 ui_i32_max(UI_i32 a, UI_i32 b) {
+    UI_i32 result = a > b ? a : b;
+    return result;
+};
 
 typedef struct UI_V4f {
     UI_f32 x;
@@ -96,14 +103,23 @@ typedef struct UI_DrawCmmd {
     UI_V4f color;
 } UI_DrawCmmd;
 
+typedef enum UI_WidgetType {
+    UI_WIDGET_BUTTON,
+    UI_WIDGET_CHECKBOX,
+    UI_WIDGET_SLIDER
+} UI_WidgetType;
+
 typedef struct UI_Widget {
     void *id;
+    UI_WidgetType type;
     struct UI_Widget *next;
 } UI_Widget;
 
 typedef struct UI_Window {
     void *id;
     UI_V2i pos;
+    UI_V2i dim;
+    UI_V2i widget_offset; 
     struct UI_Window *next;
     struct UI_Widget *widget_first;
 } UI_Window;
@@ -134,9 +150,12 @@ static UI_u64 draw_cmmd_buffer_count;
 
 static UI_State ui_state;
 static UI_V2i ui_default_button_dim = {100, 50};
+static UI_V4f ui_default_button_color = {0.4f, 0.4f, 0.4f, 1.0f};
 static UI_V2i ui_default_checkbox_dim = {25, 25};
 static UI_V2i ui_default_slider_dim = {200, 20};
 static UI_V2i ui_default_window_dim = {300, 300};
+static UI_V2i ui_default_window_margin = {10, 10};
+static UI_V4f ui_default_window_color = {0.9f, 0.9f, 0.9f, 1.0f};
 
 /* ------------------------------------------------------------------------ */
 
@@ -191,10 +210,11 @@ UI_Widget *ui_widget_get(UI_Window *window, void *id) {
     return 0;
 }
 
-UI_Widget *ui_widget_register(UI_Window *window, void *id) {
+UI_Widget *ui_widget_register(UI_Window *window, void *id, UI_WidgetType type) {
     UI_Widget *widget = (UI_Widget *)malloc(sizeof(UI_Widget));
     memset(widget, 0, sizeof(UI_Widget));
     widget->id = id;
+    widget->type = type;
     widget->next = window->widget_first;
     window->widget_first = widget;
     return widget;
@@ -272,6 +292,56 @@ void ui_quit(void) {
 }
 
 void ui_update(void) {
+    /* UI update pass */
+    UI_Window *window = ui_state.window_first;
+    while (window) {
+        UI_Widget *widget = window->widget_first;
+        while (widget) {
+            switch (widget->type) {
+                case UI_WIDGET_BUTTON: {
+                    window->dim.x = ui_i32_max(window->dim.x, ui_default_button_dim.x + (ui_default_window_margin.x * 2));
+                    window->dim.y += ui_default_button_dim.y + (ui_default_window_margin.y * 2);
+                } break;
+                case UI_WIDGET_CHECKBOX: {
+                } break;
+                case UI_WIDGET_SLIDER: {
+                } break;
+                default: {
+                    INVALID_CODE_PATH();
+                } break;
+            }
+            widget = widget->next;
+        }
+        window = window->next;
+    }
+
+    /* UI render pass */
+    window = ui_state.window_first;
+    while (window) {
+        ui_push_rect(window->pos, window->dim, ui_default_window_color);
+        UI_Widget *widget = window->widget_first;
+        while(widget) {
+            switch (widget->type) {
+                case UI_WIDGET_BUTTON: {
+                    UI_V2i pos = v2i_add(window->widget_offset, ui_default_window_margin);
+                    ui_push_rect(v2i_add(window->pos, pos), ui_default_button_dim, ui_default_button_color);
+                    window->widget_offset = v2i_add(window->widget_offset, v2i_add(pos, ui_default_button_dim));
+                } break;
+                case UI_WIDGET_CHECKBOX: {
+                } break;
+                case UI_WIDGET_SLIDER: {
+                } break;
+                default: {
+                    INVALID_CODE_PATH();
+                } break;
+            }
+            widget = widget->next;
+        }
+        window = window->next;
+    }
+
+    /* ------------------------------------------------ */
+
     /* TODO: See how to update frame information */
     ui_state.mouse_went_down = FALSE;
     ui_state.mouse_went_up = FALSE;
@@ -281,8 +351,6 @@ void ui_update(void) {
 }
 
 void ui_begin_window(void *id, int x, int y) {
-    UI_V2i dim = ui_default_window_dim;
-    UI_V4f color = v4f(0.9f, 0.9f, 0.9f, 1.0f);
     UI_Window *window = ui_window_get(id);
     if (!window) {
         /* Initialize window */
@@ -292,8 +360,6 @@ void ui_begin_window(void *id, int x, int y) {
     }
     ui_state.window_current = window;
     /* TODO: Implemets window logic */
-    /* Window rendering */
-    ui_push_rect(window->pos, dim, color);
 }
 void ui_end_window(void) {
     ui_state.window_current = 0;
@@ -312,7 +378,7 @@ UI_b32 ui_button(void *id, char *name, int x, int y) {
         UI_Window *window = ui_state.window_current;
         UI_Widget *widget = ui_widget_get(window, id);
         if (!widget) {
-            widget = ui_widget_register(window, id);
+            widget = ui_widget_register(window, id, UI_WIDGET_BUTTON);
         }
         pos = v2i_add(window->pos, pos);
     }
@@ -342,7 +408,10 @@ UI_b32 ui_button(void *id, char *name, int x, int y) {
     if (result) {
         color = v4f(0.4f, 0.4f, 0.8f, 1.0f);
     }
-    ui_push_rect(pos, dim, color);
+
+    if(!ui_state.window_current) {
+        ui_push_rect(pos, dim, color);
+    }
     return result;
 }
 
@@ -426,8 +495,7 @@ void ui_slider(void *id, float *value, int x, int y) {
 
 /* ------------------------------------------------------------------------ */
 
-void ui_draw_draw_cmmd_buffer(HWND window) {
-    (void)window;
+void ui_draw_draw_cmmd_buffer(void) {
     for (UI_u64 i = 0; i < draw_cmmd_buffer_count; ++i) {
         UI_DrawCmmd cmmd = draw_cmmd_buffer[i];
         UI_RectMesh r = ui_rect_get_mesh(cmmd.pos, cmmd.dim);
@@ -454,13 +522,12 @@ void ui_draw_draw_cmmd_buffer(HWND window) {
 void main_loop(HWND window) {
     HDC device_context = GetDC(window);
 
-    /* TODO: check if this pointers have to be static */
     char *button_name = "button";
     if(ui_button((void *)(button_name + 0), button_name, 100, 50)) {
     }
 
-    ui_begin_window((void *)main_loop, 100, 200);
-    if(ui_button((void *)(button_name + 1), button_name, 16, 16)) {
+    ui_begin_window((void *)(button_name + 1), 100, 200);
+    if(ui_button((void *)(button_name + 2), button_name, 16, 16)) {
     }
     ui_end_window();
 
@@ -474,7 +541,7 @@ void main_loop(HWND window) {
     glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-    ui_draw_draw_cmmd_buffer(window);
+    ui_draw_draw_cmmd_buffer();
 
     SwapBuffers(device_context);
     ReleaseDC(window, device_context);
