@@ -96,12 +96,28 @@ typedef struct UI_DrawCmmd {
     UI_V4f color;
 } UI_DrawCmmd;
 
+typedef struct UI_Widget {
+    void *id;
+    struct UI_Widget *next;
+} UI_Widget;
+
+typedef struct UI_Window {
+    void *id;
+    UI_V2i pos;
+    struct UI_Window *next;
+    struct UI_Widget *widget_first;
+} UI_Window;
+
 typedef struct UI_State {
     /* Widget */
     void *active;
     void *hot;
     void *hover;
     void *next_hover;
+
+    UI_Window *window_first;
+    UI_Window *window_current;
+    
     /* Input */
     UI_V2i mouse;
     UI_b32 mouse_is_down;
@@ -117,9 +133,10 @@ static struct UI_DrawCmmd draw_cmmd_buffer[UI_DRAW_CMMD_BUFFER_MAX];
 static UI_u64 draw_cmmd_buffer_count;
 
 static UI_State ui_state;
-static UI_V2i ui_default_button_dim = {200, 100};
-static UI_V2i ui_default_checkbox_dim = {50, 50};
+static UI_V2i ui_default_button_dim = {100, 50};
+static UI_V2i ui_default_checkbox_dim = {25, 25};
 static UI_V2i ui_default_slider_dim = {200, 20};
+static UI_V2i ui_default_window_dim = {300, 300};
 
 /* ------------------------------------------------------------------------ */
 
@@ -164,20 +181,49 @@ void ui_push_rect(UI_V2i pos, UI_V2i dim, UI_V4f color) {
     ui_push_draw_cmmd(cmmd);
 }
 
+UI_Widget *ui_widget_get(UI_Window *window, void *id) {
+    UI_Widget *widget = window->widget_first;
+    while (widget) {
+        if (widget->id == id) {
+            return widget;
+        }
+    }
+    return 0;
+}
+
+UI_Widget *ui_widget_register(UI_Window *window, void *id) {
+    UI_Widget *widget = (UI_Widget *)malloc(sizeof(UI_Widget));
+    memset(widget, 0, sizeof(UI_Widget));
+    widget->id = id;
+    widget->next = window->widget_first;
+    window->widget_first = widget;
+    return widget;
+}
+
+UI_Window *ui_window_get(void *id) {
+    UI_Window *window = ui_state.window_first;
+    while (window) {
+        if (window->id == id) {
+            return window;
+        }
+        window = window->next;
+    }
+    return 0;
+}
+
+UI_Window *ui_window_register(void *id) {
+    UI_Window *window = (UI_Window *)malloc(sizeof(UI_Window));
+    memset(window, 0, sizeof(UI_Window));
+    window->id = id;
+    window->next = ui_state.window_first;
+    ui_state.window_first = window;
+    return window;
+}
+
 UI_b32 ui_mouse_inside_rect(UI_V2i pos, UI_V2i dim) {
     UI_b32 result = ui_state.mouse.x >= pos.x && ui_state.mouse.x < (pos.x + dim.x) &&
         ui_state.mouse.y >= pos.y && ui_state.mouse.y < (pos.y + dim.y);
     return result;
-}
-
-void ui_update(void)
-{
-    /* TODO: See how to update frame information */
-    ui_state.mouse_went_down = FALSE;
-    ui_state.mouse_went_up = FALSE;
-    /* TODO: Check if next_hover = 0 is necessary */
-    ui_state.hover = ui_state.next_hover;
-    ui_state.next_hover = 0;
 }
 
 inline void ui_set_hot(void *id) {
@@ -206,12 +252,70 @@ inline UI_b32 ui_is_hover(void *id) {
     return ui_state.hover == id;
 }
 
+void ui_init(void) {
+    /* TODO: initialize ui_state */
+}
+
+void ui_quit(void) {
+    UI_Window *window = ui_state.window_first;
+    while(window) {
+        UI_Widget *widget = window->widget_first;
+        while(widget) {
+            void *to_free = widget;
+            widget = widget->next;
+            free(to_free);
+        }
+        void *to_free = window;
+        window = window->next;
+        free(to_free);
+    }
+}
+
+void ui_update(void) {
+    /* TODO: See how to update frame information */
+    ui_state.mouse_went_down = FALSE;
+    ui_state.mouse_went_up = FALSE;
+    /* TODO: Check if next_hover = 0 is necessary */
+    ui_state.hover = ui_state.next_hover;
+    ui_state.next_hover = 0;
+}
+
+void ui_begin_window(void *id, int x, int y) {
+    UI_V2i dim = ui_default_window_dim;
+    UI_V4f color = v4f(0.9f, 0.9f, 0.9f, 1.0f);
+    UI_Window *window = ui_window_get(id);
+    if (!window) {
+        /* Initialize window */
+        window = ui_window_register(id);
+        window->pos.x = x;
+        window->pos.y = y;
+    }
+    ui_state.window_current = window;
+    /* TODO: Implemets window logic */
+    /* Window rendering */
+    ui_push_rect(window->pos, dim, color);
+}
+void ui_end_window(void) {
+    ui_state.window_current = 0;
+}
+
 UI_b32 ui_button(void *id, char *name, int x, int y) {
-    /* Widget dimensions */
+
+    /* Widget dimensions:
+    If the widget is not iside the window x and y are abs coordinates.
+    Uf the widget is inside a window x and y are coordiantes relative to that window. */
     UI_V2i pos = v2i(x, y);
     UI_V2i dim = ui_default_button_dim;
     UI_V4f color = v4f(0.4f, 0.4f, 0.4f, 1.0f);
     UI_b32 result = FALSE;
+    if (ui_state.window_current) {
+        UI_Window *window = ui_state.window_current;
+        UI_Widget *widget = ui_widget_get(window, id);
+        if (!widget) {
+            widget = ui_widget_register(window, id);
+        }
+        pos = v2i_add(window->pos, pos);
+    }
     /* Widget logic */
     if (ui_is_hover(id)) {
         if (ui_is_active(id) && ui_state.mouse_went_up) {
@@ -247,8 +351,8 @@ void ui_checkbox(void *id, UI_b32 *value, int x, int y) {
     UI_V2i pos = v2i(x, y);
     UI_V2i dim = ui_default_checkbox_dim;
     UI_V4f color = v4f(0.4f, 0.4f, 0.4f, 1.0f);
-    UI_V2i inner_pos = v2i_add(pos, v2i(8, 8));
-    UI_V2i inner_dim = v2i_sub(dim, v2i(16, 16));
+    UI_V2i inner_pos = v2i_add(pos, v2i(4, 4));
+    UI_V2i inner_dim = v2i_sub(dim, v2i(8, 8));
     UI_V4f inner_color = v4f(0.7f, 0.7f, 0.7f, 1.0f);
     /* Widget logic */
     if (ui_is_hover(id)) {
@@ -352,14 +456,18 @@ void main_loop(HWND window) {
 
     /* TODO: check if this pointers have to be static */
     char *button_name = "button";
-    if(ui_button((void *)(button_name + 0), button_name, 100, 100)) {
+    if(ui_button((void *)(button_name + 0), button_name, 100, 50)) {
     }
-    if(ui_button((void *)(button_name + 1), button_name, 100, 300)) {
+
+    ui_begin_window((void *)main_loop, 100, 200);
+    if(ui_button((void *)(button_name + 1), button_name, 16, 16)) {
     }
+    ui_end_window();
+
     static UI_b32 checked = 0;
-    ui_checkbox((void *)&checked, &checked, 200, 100);
+    ui_checkbox((void *)&checked, &checked, 400, 50);
     static float value = 0.0f;
-    ui_slider((void  *)&value, &value, 400, 200);
+    ui_slider((void  *)&value, &value, 400, 100);
     
     ui_update();
     
