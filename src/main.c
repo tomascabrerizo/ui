@@ -206,6 +206,7 @@ UI_Widget *ui_widget_get(UI_Window *window, void *id) {
         if (widget->id == id) {
             return widget;
         }
+        widget = widget->next;
     }
     return 0;
 }
@@ -295,12 +296,15 @@ void ui_update(void) {
     /* UI update pass */
     UI_Window *window = ui_state.window_first;
     while (window) {
+        /* TODO: This state can be temporal */ 
+        window->dim = v2i(0, (ui_default_window_margin.y));
+        window->widget_offset = v2i(0, 0);
         UI_Widget *widget = window->widget_first;
         while (widget) {
             switch (widget->type) {
                 case UI_WIDGET_BUTTON: {
                     window->dim.x = ui_i32_max(window->dim.x, ui_default_button_dim.x + (ui_default_window_margin.x * 2));
-                    window->dim.y += ui_default_button_dim.y + (ui_default_window_margin.y * 2);
+                    window->dim.y += ui_default_button_dim.y + ui_default_window_margin.y;
                 } break;
                 case UI_WIDGET_CHECKBOX: {
                 } break;
@@ -325,7 +329,7 @@ void ui_update(void) {
                 case UI_WIDGET_BUTTON: {
                     UI_V2i pos = v2i_add(window->widget_offset, ui_default_window_margin);
                     ui_push_rect(v2i_add(window->pos, pos), ui_default_button_dim, ui_default_button_color);
-                    window->widget_offset = v2i_add(window->widget_offset, v2i_add(pos, ui_default_button_dim));
+                    window->widget_offset.y += ui_default_button_dim.y + ui_default_window_margin.y;
                 } break;
                 case UI_WIDGET_CHECKBOX: {
                 } break;
@@ -528,6 +532,12 @@ void main_loop(HWND window) {
 
     ui_begin_window((void *)(button_name + 1), 100, 200);
     if(ui_button((void *)(button_name + 2), button_name, 16, 16)) {
+    }
+    if(ui_button((void *)(button_name + 3), button_name, 16, 16)) {
+    }
+    if(ui_button((void *)(button_name + 4), button_name, 16, 16)) {
+    }
+    if(ui_button((void *)(button_name + 5), button_name, 16, 16)) {
     }
     ui_end_window();
 
