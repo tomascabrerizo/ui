@@ -296,10 +296,9 @@ void ui_update(void) {
     /* UI update pass */
     UI_Window *window = ui_state.window_first;
     while (window) {
-        /* TODO: This state can be temporal */ 
         window->dim = v2i(0, (ui_default_window_margin.y));
-        window->widget_offset = v2i(0, 0);
-        UI_Widget *widget = window->widget_first;
+        window->widget_offset = v2i(0, 0); /* TODO: This state can be temporal */
+        UI_Widget *widget = window->widget_first; 
         while (widget) {
             switch (widget->type) {
                 case UI_WIDGET_BUTTON: {
@@ -528,16 +527,21 @@ void main_loop(HWND window) {
 
     char *button_name = "button";
     if(ui_button((void *)(button_name + 0), button_name, 100, 50)) {
+        printf("button: %d pressed\n", 1);
     }
 
     ui_begin_window((void *)(button_name + 1), 100, 200);
     if(ui_button((void *)(button_name + 2), button_name, 16, 16)) {
+        printf("button: %d pressed\n", 2);
     }
     if(ui_button((void *)(button_name + 3), button_name, 16, 16)) {
+        printf("button: %d pressed\n", 3);
     }
     if(ui_button((void *)(button_name + 4), button_name, 16, 16)) {
+        printf("button: %d pressed\n", 4);
     }
     if(ui_button((void *)(button_name + 5), button_name, 16, 16)) {
+        printf("button: %d pressed\n", 5);
     }
     ui_end_window();
 
