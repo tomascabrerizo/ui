@@ -4,7 +4,7 @@ if not exist ..\build mkdir ..\build
 
 set TARGET=ui
 set CFLAGS=/nologo /FC /Od /Zi /Wall /WX /wd4668 /wd4100 /wd4062 /wd4820 /wd5045 /wd4324 /wd4711 /wd4710 /wd5220 /wd4191
-set SRCS=main.c
+set SRCS=ui.c
 set LFLAGS=/incremental:no
 set LIBS=kernel32.lib user32.lib gdi32.lib Winmm.lib opengl32.lib
 set OUT_DIR=/Fo..\build\ /Fe..\build\%TARGET% /Fm..\build\ /Fd..\build\

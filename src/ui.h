@@ -80,7 +80,6 @@ typedef struct UI_DrawCmmd {
 typedef BOOL (WINAPI * PFNWGLSWAPINTERVALEXTPROC) (int interval);
 static PFNWGLSWAPINTERVALEXTPROC wglSwapIntervalEXT;
 
-
 typedef enum UI_Flags {
     UI_CLICKABLE        = (1 << 0),
     UI_DRAW_BACKGROUND  = (1 << 1),
@@ -93,8 +92,6 @@ typedef struct UI_Widget {
     /* Widget state */
     void *id;
     UI_Flags flags;
-    UI_b32 hot;
-    UI_b32 active;
     /* Widget hierarchy */
     struct UI_Widget *parent;
     struct UI_Widget *first;
@@ -106,6 +103,9 @@ typedef struct UI_Widget {
 } UI_Widget;
 
 typedef struct UI_State {
+    void *hot;
+    void *active;
+
     UI_Widget *root;
     UI_Widget *current;
     UI_Widget *reglist; /* TODO: this can be a hash table */

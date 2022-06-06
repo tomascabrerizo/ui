@@ -43,10 +43,19 @@ void ui_push_rect(UI_V2i pos, UI_V2i dim, UI_V4f color) {
     ui_push_draw_cmmd(cmmd);
 }
 
+inline void ui_clear_tree_nodes(UI_Widget *widget) {
+    widget->parent = 0;
+    widget->first  = 0;
+    widget->last   = 0;
+    widget->next   = 0;
+    widget->prev   = 0;
+}
+
 UI_Widget *ui_get_widget(void *id) {
     UI_Widget *widget = ui.reglist;
     while (widget) {
         if (widget->id == id) {
+            ui_clear_tree_nodes(widget);
             return widget;
         }
         widget = widget->reglist_next;
@@ -64,6 +73,8 @@ void ui_init(void) {
 }
 
 void ui_update(void) {
+    ui.root = 0;
+    ui.current = 0;
 }
 
 void ui_quit(void) {
@@ -77,30 +88,31 @@ void ui_quit(void) {
     ui.reglist = 0;
 }
 
-void ui_begin_widget(void *id) {
-    UI_Widget *widget = ui_get_widget(id);
-    widget->parent = ui.current;
-    ui.current = widget;
-}
-
-void ui_end_widget(void *id) {
-    UI_Widget *widget = ui_get_widget(id);
-    if (widget->parent) { /* NOTE: this can be a bad hack */
-        ui.current = widget->parent;
-    }
-}
-
-void ui_add_widget(void *id) {
-    UI_Widget *widget = ui_get_widget(id);
+void ui_add_widget_to_tree(UI_Widget *widget) {
     UI_Widget *parent = ui.current;
-    if (!parent->first) {
-        parent->first = widget;
+    if(parent) {
+        if (!parent->first) {
+            parent->first = widget;
+        } else {
+            parent->last->next = widget;
+        }
+        widget->prev = parent->last;
+        parent->last = widget;
+        widget->parent = parent;
     } else {
-        parent->last->next = widget;
+        ui.root = widget;
     }
-    widget->prev = parent->last;
-    parent->last = widget;
-    widget->parent = parent;
+}
+
+UI_Widget *ui_begin_widget(void *id) {
+    UI_Widget *widget = ui_get_widget(id);
+    ui_add_widget_to_tree(widget);
+    ui.current = widget;
+    return widget;
+}
+
+void ui_end_widget(void) {
+    ui.current = ui.current->parent;
 }
 
 void main_loop(float dt) {
@@ -109,17 +121,13 @@ void main_loop(float dt) {
     static char *ids = "0123456789";
     ui_begin_widget((void *)(ids + 0));
 
-    ui_add_widget((void *)(ids + 1));
-    ui_add_widget((void *)(ids + 2));
+    ui_begin_widget((void *)(ids + 1));
+    ui_end_widget();
 
-    ui_begin_widget((void *)(ids + 3));
+    ui_begin_widget((void *)(ids + 2));
+    ui_end_widget();
 
-    ui_add_widget((void *)(ids + 4));
-    ui_add_widget((void *)(ids + 5));
-
-    ui_end_widget((void *)(ids + 3));
-
-    ui_end_widget((void *)(ids + 0));
+    ui_end_widget();
 
     ui_update();
 }
