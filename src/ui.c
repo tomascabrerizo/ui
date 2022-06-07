@@ -72,11 +72,6 @@ UI_Widget *ui_get_widget(void *id) {
 void ui_init(void) {
 }
 
-void ui_update(void) {
-    ui.root = 0;
-    ui.current = 0;
-}
-
 void ui_quit(void) {
     UI_Widget *widget = ui.reglist;
     while(widget) {
@@ -86,6 +81,55 @@ void ui_quit(void) {
         free(to_free); /* TODO: Why after call free on widget the programs jumps to undefine behavior */
     }
     ui.reglist = 0;
+}
+
+void ui_update_layout(UI_Widget *widget) {
+    UI_Widget *child = widget->first;
+    UI_V2i widget_dim = (widget->layout == WIDGET_LAYOUT_NONE) ? widget->dim : v2i(0, 0);
+    while (child) {
+        ui_update_layout(child);
+        child = child->next;
+        switch (widget->layout) {
+            case WIDGET_LAYOUT_COLUMN: {
+                widget_dim.x = ui_i32_max(widget_dim.x, child->dim.x);
+                widget_dim.y += child->dim.y;
+            } break;
+            case WIDGET_LAYOUT_ROW: {
+                widget_dim.x += child->dim.x;
+                widget_dim.y = ui_i32_max(widget_dim.y, child->dim.y);
+            } break;
+            case WIDGET_LAYOUT_GRID: { /* TODO: Layout grid logic */ } break;
+        }
+    }
+    widget->dim = widget_dim;
+}
+
+void ui_render_layout(UI_Widget *widget) {
+    /* TODO: Funtion not implemented */
+    (void)widget;
+}
+
+void ui_update_and_render(void) {
+    ui_update_layout(ui.root);
+    ui_render_layout(ui.root);
+
+    ui.root = 0;
+    ui.current = 0;
+}
+
+UI_Ctrl ui_do_ctrl(UI_Widget *widget, UI_Flags flags) {
+    UI_Ctrl result;
+    memset(&result, 0, sizeof(UI_Ctrl));
+    switch(flags) {
+        case UI_CLICKABLE: { /* TODO: ... */ } break;
+        case UI_DRAW_BACKGROUND: { /* TODO: ... */ } break;
+        case UI_CONTAINER: { /* TODO: ... */ } break;
+        case UI_CLIPPING: { /* TODO: ... */ } break;
+        case UI_HOT_ANIMATION: { /* TODO: ... */ } break;
+        case UI_ACTIVE_ANIMATION: { /* TODO: ... */ } break;
+        default: { INVALID_CODE_PATH(); } break;
+    }
+    return result;
 }
 
 void ui_add_widget_to_tree(UI_Widget *widget) {
@@ -115,6 +159,16 @@ void ui_end_widget(void) {
     ui.current = ui.current->parent;
 }
 
+void ui_container_begin(void *id) {
+    UI_Widget *widget = ui_begin_widget(id);
+    UI_Ctrl result = ui_do_ctrl(widget, UI_CONTAINER|UI_CLICKABLE|UI_CLIPPING);
+    (void)result;
+}
+
+void ui_container_end(void) {
+    ui_end_widget();
+}
+
 void main_loop(float dt) {
     ui_push_rect(v2i(100, 100), v2i(100, 100), v4f(0.6f, 0.2f, 0.8f, 1.0f));
 
@@ -129,7 +183,7 @@ void main_loop(float dt) {
 
     ui_end_widget();
 
-    ui_update();
+    ui_update_and_render();
 }
 
 void ui_draw_draw_cmmd_buffer(HDC device_context) {

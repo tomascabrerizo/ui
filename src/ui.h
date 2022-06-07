@@ -29,6 +29,11 @@ typedef uint32_t UI_b32;
 typedef float    UI_f32;
 typedef double   UI_f64;
 
+inline UI_i32 ui_i32_max(UI_i32 a, UI_i32 b) {
+    UI_i32 result = (a > b) ? a : b;
+    return result;
+}
+
 typedef struct UI_V4f {
     UI_f32 x;
     UI_f32 y;
@@ -80,18 +85,28 @@ typedef struct UI_DrawCmmd {
 typedef BOOL (WINAPI * PFNWGLSWAPINTERVALEXTPROC) (int interval);
 static PFNWGLSWAPINTERVALEXTPROC wglSwapIntervalEXT;
 
+typedef enum UI_Layout {
+    WIDGET_LAYOUT_NONE,
+    WIDGET_LAYOUT_COLUMN,
+    WIDGET_LAYOUT_ROW,
+    WIDGET_LAYOUT_GRID,
+} UI_Layout;
+
 typedef enum UI_Flags {
     UI_CLICKABLE        = (1 << 0),
     UI_DRAW_BACKGROUND  = (1 << 1),
-    UI_CLIP             = (1 << 2),
-    UI_HOT_ANIMATION    = (1 << 3),
-    UI_ACTIVE_ANIMATION = (1 << 4),
+    UI_CONTAINER        = (1 << 2),
+    UI_CLIPPING         = (1 << 3),
+    UI_HOT_ANIMATION    = (1 << 4),
+    UI_ACTIVE_ANIMATION = (1 << 5),
 } UI_Flags;
 
 typedef struct UI_Widget {
     /* Widget state */
     void *id;
     UI_Flags flags;
+    UI_Layout layout;
+    UI_V2i dim;
     /* Widget hierarchy */
     struct UI_Widget *parent;
     struct UI_Widget *first;
@@ -101,6 +116,10 @@ typedef struct UI_Widget {
     /* register list */
     struct UI_Widget *reglist_next;
 } UI_Widget;
+
+typedef struct UI_Ctrl {
+    void *temp;
+} UI_Ctrl;
 
 typedef struct UI_State {
     void *hot;
